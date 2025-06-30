@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>MoveNet Pose Detection Fullscreen</title>
+  <style>
+    html, body {
+      margin: 0; padding: 0; overflow: hidden;
+      height: 100%; width: 100%;
+    }
+    video, canvas {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100vw; height: 100vh;
+      object-fit: cover;
+      transform: scaleX(-1);
+    }
+    canvas {
+      z-index: 10;
+    }
+  </style>
+</head>
+<body>
+  <video id="webcam" autoplay muted playsinline></video>
+  <canvas id="canvas"></canvas>
+
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection"></script>
+
+  <script>
+    const video = document.getElementById('webcam');
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+
+    // Edges for skeleton lines
+    const EDGES = {
+      '0,1': 'red', '0,2': 'green', '1,3': 'red', '2,4': 'green',
+      '0,5': 'red', '0,6': 'green', '5,7': 'red', '7,9': 'red',
+      '6,8': 'green', '8,10': 'green', '5,6': 'yellow',
+      '5,11': 'red', '6,12': 'green', '11,12': 'yellow',
+      '11,13': 'red', '13,15': 'red', '12,14': 'green', '14,16': 'green'
+    };
+
+    function resizeCanvas() {
+      canvas.width = video.clientWidth;
+      canvas.height = video.clientHeight;
+    }
+
+    video.addEventListener('loadedmetadata', () => {
+      resizeCanvas();
+    });
+
+    window.addEventListener('resize', resizeCanvas);
+    window.addEventListener('orientationchange', resizeCanvas);
+
+    async function setupCamera() {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { width: 640, height: 480 },
+        audio: false
+      });
+      video.srcObject = stream;
+      return new Promise(resolve => {
+        video.onloadedmetadata = () => resolve(video);
+      });
+    }
+
+	function drawKeypoints(keypoints, threshold = 0.4) {
+	  for (const kp of keypoints) {
+		if (kp.score > threshold) {
+		  const { x, y } = kp;
+		  ctx.beginPath();
+		  ctx.arc(x, y, 5, 0, 2 * Math.PI); // <== no multiplication
+		  ctx.fillStyle = 'lime';
+		  ctx.fill();
+		}
+	  }
+	}
+
+
+	function drawSkeleton(keypoints, threshold = 0.4) {
+	  const keypointMap = keypoints.reduce((acc, kp, i) => {
+		acc[i] = kp;
+		return acc;
+	  }, {});
+	  for (const [edge, color] of Object.entries(EDGES)) {
+		const [i, j] = edge.split(',').map(Number);
+		const kp1 = keypointMap[i];
+		const kp2 = keypointMap[j];
+		if (kp1.score > threshold && kp2.score > threshold) {
+		  ctx.beginPath();
+		  ctx.moveTo(kp1.x, kp1.y); // <== no multiplication
+		  ctx.lineTo(kp2.x, kp2.y); // <== no multiplication
+		  ctx.strokeStyle = color;
+		  ctx.lineWidth = 3;
+		  ctx.stroke();
+		}
+	  }
+	}
+
+
+    async function detectPose(detector) {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      const poses = await detector.estimatePoses(video, { flipHorizontal: true });
+
+      if (poses.length > 0) {
+        const keypoints = poses[0].keypoints;
+		
+		
+        drawKeypoints(keypoints);
+        drawSkeleton(keypoints);
+
+        // Example: log right eye and left elbow
+		const rightEye = keypoints[2];
+		const leftElbow = keypoints[7];
+
+		console.log(`Right Eye: (${Math.round(rightEye.x)}, ${Math.round(rightEye.y)})`)
+		console.log(`Left Elbow: (${Math.round(leftElbow.x * canvas.width)}, ${Math.round(leftElbow.y * canvas.height)}) - Confidence: ${leftElbow.score.toFixed(2)}`);
+
+      }
+
+      requestAnimationFrame(() => detectPose(detector));
+    }
+
+    async function main() {
+      await tf.setBackend('webgl');
+      await tf.ready();
+      await setupCamera();
+      video.play();
+      resizeCanvas();
+
+	const detector = await poseDetection.createDetector(
+	  poseDetection.SupportedModels.MoveNet,
+	  {
+		modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING
+	  }
+	);
+
+      detectPose(detector);
+    }
+
+    main();
+  </script>
+</body>
+</html>
