@@ -13,28 +13,20 @@
       top: 0; left: 0;
       width: 100vw; height: 100vh;
       object-fit: cover;
-      transform: scaleX(-1);
+      transform: scaleX(-1); /* Mirror across Y-axis */
     }
     canvas {
       z-index: 10;
     }
-    button {
-      position: absolute;
-      top: 10px;
-      left: 10px;
-      z-index: 20;
-      padding: 10px;
-      font-size: 16px;
-    }
   </style>
 </head>
 <body>
-  <button onclick="main()">Start Pose Detection</button>
   <video id="webcam" autoplay muted playsinline></video>
   <canvas id="canvas"></canvas>
 
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest"></script>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection"></script>
+
   <script>
     const video = document.getElementById('webcam');
     const canvas = document.getElementById('canvas');
@@ -49,22 +41,28 @@
     };
 
     function resizeCanvas() {
-      canvas.width = video.clientWidth;
-      canvas.height = video.clientHeight;
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
     }
 
-    video.addEventListener('loadedmetadata', resizeCanvas);
     window.addEventListener('resize', resizeCanvas);
     window.addEventListener('orientationchange', resizeCanvas);
 
     async function setupCamera() {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'user', width: 640, height: 480 },
+        video: {
+          width: { ideal: window.innerWidth },
+          height: { ideal: window.innerHeight },
+          facingMode: 'user'
+        },
         audio: false
       });
       video.srcObject = stream;
       return new Promise(resolve => {
-        video.onloadedmetadata = () => resolve(video);
+        video.onloadedmetadata = () => {
+          resizeCanvas();
+          resolve(video);
+        };
       });
     }
 
@@ -73,7 +71,7 @@
         if (kp.score > threshold) {
           const { x, y } = kp;
           ctx.beginPath();
-          ctx.arc(x * canvas.width, y * canvas.height, 5, 0, 2 * Math.PI);
+          ctx.arc(x, y, 5, 0, 2 * Math.PI);
           ctx.fillStyle = 'lime';
           ctx.fill();
         }
@@ -91,8 +89,8 @@
         const kp2 = keypointMap[j];
         if (kp1.score > threshold && kp2.score > threshold) {
           ctx.beginPath();
-          ctx.moveTo(kp1.x * canvas.width, kp1.y * canvas.height);
-          ctx.lineTo(kp2.x * canvas.width, kp2.y * canvas.height);
+          ctx.moveTo(kp1.x, kp1.y);
+          ctx.lineTo(kp2.x, kp2.y);
           ctx.strokeStyle = color;
           ctx.lineWidth = 3;
           ctx.stroke();
@@ -108,8 +106,12 @@
         const keypoints = poses[0].keypoints;
         drawKeypoints(keypoints);
         drawSkeleton(keypoints);
-        console.log("Right Eye:", keypoints[2]);
-        console.log("Left Elbow:", keypoints[7]);
+
+        const rightEye = keypoints[2];
+        const leftElbow = keypoints[7];
+
+        console.log(`Right Eye: (${Math.round(rightEye.x)}, ${Math.round(rightEye.y)}) - Confidence: ${rightEye.score.toFixed(2)}`);
+        console.log(`Left Elbow: (${Math.round(leftElbow.x)}, ${Math.round(leftElbow.y)}) - Confidence: ${leftElbow.score.toFixed(2)}`);
       }
 
       requestAnimationFrame(() => detectPose(detector));
@@ -120,7 +122,6 @@
       await tf.ready();
       await setupCamera();
       video.play();
-      resizeCanvas();
 
       const detector = await poseDetection.createDetector(
         poseDetection.SupportedModels.MoveNet,
@@ -131,6 +132,8 @@
 
       detectPose(detector);
     }
+
+    main();
   </script>
 </body>
 </html>
