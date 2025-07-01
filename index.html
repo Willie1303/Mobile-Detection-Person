@@ -3,17 +3,19 @@
 <head>
   <meta charset="UTF-8" />
   <title>MoveNet Multi-Person Pose Detection</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <style>
     html, body {
       margin: 0; padding: 0; overflow: hidden;
       height: 100%; width: 100%;
+      background: black;
     }
     video, canvas {
       position: absolute;
       top: 0; left: 0;
       width: 100vw; height: 100vh;
       object-fit: cover;
-      transform: scaleX(-1); /* Mirror across Y-axis */
+      transform: scaleX(-1); /* Mirror for selfie view */
     }
     canvas {
       z-index: 10;
@@ -25,6 +27,7 @@
       background: rgba(0, 0, 0, 0.6);
       color: white;
       font-family: monospace;
+      font-size: 14px;
       padding: 6px 10px;
       z-index: 20;
     }
@@ -62,18 +65,21 @@
 
     async function setupCamera() {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({
+        const constraints = {
           video: {
             facingMode: { ideal: 'environment' },
             width: { ideal: window.innerWidth },
             height: { ideal: window.innerHeight }
           },
           audio: false
-        });
+        };
 
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
         video.srcObject = stream;
+
         return new Promise((resolve) => {
           video.onloadedmetadata = () => {
+            video.setAttribute("playsinline", true); // Required for iOS
             video.play();
             resizeCanvas();
             output.textContent = "Camera ready.";
@@ -122,7 +128,6 @@
         drawKeypoints(keypoints);
         drawSkeleton(keypoints);
 
-        // --- Average and bounding box ---
         const xs = [], ys = [];
         for (const kp of keypoints) {
           if (kp.score > 0.4) {
