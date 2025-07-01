@@ -15,7 +15,7 @@
       top: 0; left: 0;
       width: 100vw; height: 100vh;
       object-fit: cover;
-      transform: scaleX(-1); /* Mirror for selfie view */
+      /*transform: scaleX(-1);*/ /* Mirror for selfie view */
     }
     canvas {
       z-index: 10;
@@ -136,7 +136,7 @@
 
     async function detectPose(detector) {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      const poses = await detector.estimatePoses(video, { flipHorizontal: true });
+      const poses = await detector.estimatePoses(video, { flipHorizontal: false });
 
 	  ctx.save();
 	  ctx.translate(canvas.width / 2, canvas.height / 2);
